@@ -1,0 +1,232 @@
+<!-- INTERFAZ ENTRADA HTML (SIN CAMBIOS) -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { 
+        font-family: Arial, sans-serif; 
+        padding: 20px; 
+        max-width: 600px;
+        margin: 0 auto;
+      }
+      .form-group { 
+        margin-bottom: 15px; 
+      }
+      label { 
+        display: block; 
+        margin-bottom: 5px; 
+        font-weight: bold; 
+      }
+      input, select { 
+        width: 100%; 
+        padding: 10px; 
+        box-sizing: border-box; 
+        margin-bottom: 10px;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+      }
+      button { 
+        padding: 12px 20px; 
+        margin-top: 15px; 
+        cursor: pointer; 
+        border: none;
+        border-radius: 4px;
+        font-weight: bold;
+      }
+      .search-results { 
+        border: 1px solid #ddd; 
+        padding: 15px; 
+        margin-bottom: 20px; 
+        max-height: 200px; 
+        overflow-y: auto; 
+        border-radius: 4px;
+      }
+      .btn-primary {
+        background-color: #4CAF50; 
+        color: white;
+      }
+      .btn-secondary {
+        background-color: #f44336; 
+        color: white;
+      }
+      .selected-product {
+        background-color: #e8f5e9;
+        padding: 15px;
+        border-radius: 4px;
+        margin-bottom: 20px;
+        border-left: 4px solid #4CAF50;
+      }
+    </style>
+  </head>
+  <body>
+    <h2 style="color: #2c3e50; border-bottom: 2px solid #4CAF50; padding-bottom: 10px;">
+      Registro de Entrada de Productos
+    </h2>
+    
+    <!-- Buscador de productos -->
+    <div class="form-group">
+      <label for="buscarProducto">Buscar Producto (código o descripción):</label>
+      <div style="display: flex; gap: 10px;">
+        <input type="text" id="buscarProducto" placeholder="Ingrese código o descripción">
+        <button onclick="buscarProducto()" style="flex: 0 0 100px;">Buscar</button>
+      </div>
+    </div>
+    
+    <!-- Resultados de búsqueda -->
+    <div id="resultadoBusqueda" class="search-results">
+      <!-- Aquí se mostrarán los resultados -->
+    </div>
+    
+    <!-- Producto seleccionado -->
+    <div id="productoSeleccionado" class="selected-product" style="display: none;">
+      <strong>Producto seleccionado:</strong>
+      <div id="productoInfo"></div>
+    </div>
+    
+    <!-- Campos del formulario -->
+    <div class="form-group">
+      <label for="cantidad">Cantidad:</label>
+      <input type="number" id="cantidad" min="1" value="1" required>
+    </div>
+    
+    <div class="form-group">
+      <label for="oc">Orden de Compra (OC):</label>
+      <input type="text" id="oc">
+    </div>
+    
+    <div class="form-group">
+      <label for="obs1">Observación 1:</label>
+      <input type="text" id="obs1">
+    </div>
+    
+    <div class="form-group">
+      <label for="obs2">Observación 2:</label>
+      <input type="text" id="obs2">
+    </div>
+    
+    <div style="display: flex; gap: 15px; margin-top: 30px;">
+      <button onclick="registrarEntrada()" class="btn-primary">Registrar Entrada</button>
+      <button onclick="google.script.host.close()" class="btn-secondary">Cancelar</button>
+    </div>
+
+    <script>
+      let productoSeleccionado = null;
+      
+      function buscarProducto() {
+        const termino = document.getElementById('buscarProducto').value;
+        if (!termino || termino.length < 2) {
+          alert('Por favor ingrese al menos 2 caracteres para buscar');
+          return;
+        }
+        
+        const contenedor = document.getElementById('resultadoBusqueda');
+        contenedor.innerHTML = '<div style="padding: 10px; text-align: center;">Buscando productos...</div>';
+        
+        google.script.run
+          .withSuccessHandler(mostrarResultado)
+          .withFailureHandler(function(error) {
+            contenedor.innerHTML = '<div style="color: red; padding: 10px;">Error: ' + error.message + '</div>';
+          })
+          .buscarProductos(termino);
+      }
+      
+      function mostrarResultado(resultados) {
+        const contenedor = document.getElementById('resultadoBusqueda');
+        contenedor.innerHTML = '';
+        
+        if (resultados.length === 0) {
+          contenedor.innerHTML = '<div style="padding: 10px; text-align: center;">No se encontraron productos</div>';
+          return;
+        }
+        
+        // Mostrar máximo 10 resultados
+        const maxResultados = 10;
+        for (let i = 0; i < Math.min(resultados.length, maxResultados); i++) {
+          const producto = resultados[i];
+          const div = document.createElement('div');
+          div.style.padding = '12px';
+          div.style.borderBottom = '1px solid #eee';
+          div.style.cursor = 'pointer';
+          div.style.display = 'flex';
+          div.style.justifyContent = 'space-between';
+          div.style.alignItems = 'center';
+          
+          div.innerHTML = `
+            <div>
+              <div style="font-weight: bold; color: #2c3e50;">${producto.codigo}</div>
+              <div>${producto.descripcion}</div>
+            </div>
+            <div style="text-align: right; font-size: 0.9em; color: #7f8c8d;">
+              <div>Stock: ${producto.stock} ${producto.und}</div>
+            </div>
+          `;
+          
+          div.onclick = () => seleccionarProducto(producto);
+          contenedor.appendChild(div);
+        }
+        
+        if (resultados.length > maxResultados) {
+          const msg = document.createElement('div');
+          msg.style.padding = '10px';
+          msg.style.fontStyle = 'italic';
+          msg.style.textAlign = 'center';
+          msg.style.color = '#7f8c8d';
+          msg.textContent = `Mostrando ${maxResultados} de ${resultados.length} resultados`;
+          contenedor.appendChild(msg);
+        }
+      }
+      
+      function seleccionarProducto(producto) {
+        productoSeleccionado = producto;
+        
+        // Mostrar sección de producto seleccionado
+        document.getElementById('productoSeleccionado').style.display = 'block';
+        document.getElementById('productoInfo').innerHTML = `
+          <div><strong>Código:</strong> ${producto.codigo}</div>
+          <div><strong>Descripción:</strong> ${producto.descripcion}</div>
+          <div><strong>Unidad:</strong> ${producto.und}</div>
+          <div><strong>Stock actual:</strong> ${producto.stock}</div>
+        `;
+      }
+      
+      function registrarEntrada() {
+        if (!productoSeleccionado) {
+          alert('Por favor seleccione un producto primero');
+          return;
+        }
+        
+        const cantidad = document.getElementById('cantidad').value;
+        if (!cantidad || cantidad <= 0) {
+          alert('Por favor ingrese una cantidad válida');
+          return;
+        }
+        
+        const datos = {
+          codigo: productoSeleccionado.codigo,
+          cantidad: cantidad,
+          oc: document.getElementById('oc').value,
+          obs1: document.getElementById('obs1').value,
+          obs2: document.getElementById('obs2').value
+        };
+        
+        // Mostrar mensaje de procesamiento
+        const boton = document.querySelector('.btn-primary');
+        boton.textContent = 'Registrando...';
+        boton.disabled = true;
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            alert(result);
+            google.script.host.close();
+          })
+          .withFailureHandler(function(error) {
+            alert('Error: ' + error.message);
+            boton.textContent = 'Registrar Entrada';
+            boton.disabled = false;
+          })
+          .registrarEntradaDesdeInterfaz(datos);
+      }
+    </script>
+  </body>
+</html>

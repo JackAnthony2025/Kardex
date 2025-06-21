@@ -1,0 +1,267 @@
+<!-- INTERFAZ SALIDA HTML CORREGIDA -->
+<!DOCTYPE html>
+<html>
+  <head>
+    <base target="_top">
+    <style>
+      body { font-family: Arial, sans-serif; margin: 20px; color: #333; }
+      .container { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 20px; }
+      .full-width { grid-column: span 2; }
+      label { display: block; margin-bottom: 5px; font-weight: bold; }
+      input, select { width: 100%; padding: 10px; border: 1px solid #ddd; border-radius: 4px; }
+      .fixed-field { padding: 10px; background-color: #f5f5f5; border: 1px solid #ddd; border-radius: 4px; }
+      .search-section { margin: 20px 0; }
+      table { width: 100%; border-collapse: collapse; margin: 20px 0; }
+      th, td { border: 1px solid #ddd; padding: 10px; text-align: left; }
+      th { background-color: #f2f2f2; }
+      .btn-group { display: flex; justify-content: flex-end; gap: 10px; }
+      .btn-primary { background-color: #4CAF50; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; }
+      .btn-secondary { background-color: #f44336; color: white; padding: 12px 20px; border: none; border-radius: 4px; cursor: pointer; }
+      .section-title { color: #2c3e50; border-bottom: 2px solid #4CAF50; padding-bottom: 10px; }
+    </style>
+  </head>
+  <body>
+    <h1 class="section-title">Registro de Salida - Pecosa</h1>
+    
+    <div class="container">
+      <div>
+        <label>N° Pecosa:</label>
+        <input type="text" id="pecosa" required style="font-weight: bold;">
+      </div>
+      <div>
+        <label>Fecha:</label>
+        <div style="display: flex; gap: 10px;">
+          <input type="number" id="dia" placeholder="Día" min="1" max="31" style="width: 30%;" required>
+          <input type="number" id="mes" placeholder="Mes" min="1" max="12" style="width: 30%;" required>
+          <input type="number" id="anio" placeholder="Año" min="2023" max="2030" style="width: 40%;" required>
+        </div>
+      </div>
+      <div>
+        <label>Unidad Orgánica:</label>
+        <div class="fixed-field">SUB GERENCIA DE CONTROL PATRIMONIAL Y ALMACÉN</div>
+      </div>
+      <div>
+        <label>Solicitante:</label>
+        <select id="solicitante" required>
+          <!-- Lista de unidades orgánicas se cargará dinámicamente -->
+        </select>
+      </div>
+      <div class="full-width">
+        <label>Observación:</label>
+        <input type="text" id="observacion">
+      </div>
+      <div class="full-width">
+        <label>Referencia:</label>
+        <input type="text" id="referencia">
+      </div>
+    </div>
+
+    <div class="search-section">
+      <h3 style="color: #2c3e50; margin-top: 0;">Artículos a Despachar</h3>
+      <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+        <input type="text" id="buscarArticulo" placeholder="Buscar por código o descripción" style="flex: 3;">
+        <button onclick="buscarProductos()" style="flex: 0 0 100px; padding: 10px;">Buscar</button>
+      </div>
+      <div id="resultadosBusqueda" style="max-height: 200px; overflow-y: auto; margin-bottom: 20px; border: 1px solid #ddd; border-radius: 4px; padding: 10px;"></div>
+      
+      <table id="tablaArticulos">
+        <thead>
+          <tr>
+            <th>Código</th>
+            <th>Descripción</th>
+            <th>Cantidad</th>
+            <th>Unidad</th>
+            <th>Costo Unitario</th>
+            <th>Total</th>
+            <th>OC</th>
+            <th>Acción</th>
+          </tr>
+        </thead>
+        <tbody id="cuerpoTabla">
+          <!-- Filas se agregarán dinámicamente -->
+        </tbody>
+      </table>
+    </div>
+
+    <div class="btn-group">
+      <button onclick="generarPecosa()" class="btn-primary">Generar Pecosa</button>
+      <button onclick="google.script.host.close()" class="btn-secondary">Cancelar</button>
+    </div>
+
+    <script>
+      let productosSeleccionados = [];
+      let productosEncontrados = [];
+      
+      // Cargar unidades orgánicas al iniciar
+      google.script.run
+        .withSuccessHandler(popularUnidades)
+        .obtenerUnidadesOrganicas();
+      
+      function popularUnidades(unidades) {
+        const select = document.getElementById('solicitante');
+        unidades.sort();
+        unidades.forEach(u => {
+          const option = document.createElement('option');
+          option.value = u;
+          option.textContent = u;
+          select.appendChild(option);
+        });
+      }
+      
+      function buscarProductos() {
+        const termino = document.getElementById('buscarArticulo').value;
+        if (!termino || termino.length < 2) {
+          alert('Por favor ingrese al menos 2 caracteres para buscar');
+          return;
+        }
+        
+        const contenedor = document.getElementById('resultadosBusqueda');
+        contenedor.innerHTML = '<div style="padding: 10px; text-align: center;">Buscando productos...</div>';
+        
+        google.script.run
+          .withSuccessHandler(mostrarResultados)
+          .withFailureHandler(function(error) {
+            contenedor.innerHTML = '<div style="color: red; padding: 10px;">Error: ' + error.message + '</div>';
+          })
+          .buscarProductos(termino);
+      }
+      
+      function mostrarResultados(resultados) {
+        productosEncontrados = resultados;
+        const contenedor = document.getElementById('resultadosBusqueda');
+        contenedor.innerHTML = '';
+        
+        if (resultados.length === 0) {
+          contenedor.innerHTML = '<div style="padding: 10px; text-align: center;">No se encontraron productos</div>';
+          return;
+        }
+        
+        resultados.forEach((producto, index) => {
+          const div = document.createElement('div');
+          div.style.padding = '12px';
+          div.style.borderBottom = '1px solid #eee';
+          div.style.cursor = 'pointer';
+          div.style.display = 'flex';
+          div.style.justifyContent = 'space-between';
+          div.style.alignItems = 'center';
+          
+          div.innerHTML = `
+            <div>
+              <div style="font-weight: bold; color: #2c3e50;">${producto.codigo}</div>
+              <div>${producto.descripcion}</div>
+            </div>
+            <div style="text-align: right; font-size: 0.9em; color: #7f8c8d;">
+              <div>Stock: ${producto.stock} ${producto.und}</div>
+              <div>Costo: S/ ${producto.costo.toFixed(2)}</div>
+            </div>
+          `;
+          
+          div.onclick = () => agregarProducto(index);
+          contenedor.appendChild(div);
+        });
+      }
+      
+      function agregarProducto(index) {
+        const producto = productosEncontrados[index];
+        
+        // Verificar si ya fue agregado
+        if (productosSeleccionados.some(p => p.codigo === producto.codigo)) {
+          alert('Este producto ya está en la lista de despacho');
+          return;
+        }
+        
+        productosSeleccionados.push({
+          ...producto,
+          cantidad: 1,
+          oc: ''
+        });
+        
+        actualizarTabla();
+      }
+      
+      function actualizarTabla() {
+        const cuerpo = document.getElementById('cuerpoTabla');
+        cuerpo.innerHTML = '';
+        
+        productosSeleccionados.forEach((producto, index) => {
+          const total = producto.cantidad * producto.costo;
+          const fila = document.createElement('tr');
+          fila.innerHTML = `
+            <td>${producto.codigo}</td>
+            <td>${producto.descripcion}</td>
+            <td><input type="number" min="1" value="${producto.cantidad}" 
+                 onchange="actualizarCantidad(${index}, this.value)" style="width: 80px;"></td>
+            <td>${producto.und}</td>
+            <td>S/ ${producto.costo.toFixed(2)}</td>
+            <td>S/ ${total.toFixed(2)}</td>
+            <td><input type="text" value="${producto.oc}" 
+                 onchange="actualizarOC(${index}, this.value)" style="width: 100px;"></td>
+            <td><button onclick="eliminarProducto(${index})" style="background-color: #e74c3c; color: white; border: none; padding: 6px 12px; border-radius: 4px; cursor: pointer;">Eliminar</button></td>
+          `;
+          cuerpo.appendChild(fila);
+        });
+      }
+      
+      function actualizarCantidad(index, valor) {
+        const nuevaCantidad = parseInt(valor) || 1;
+        productosSeleccionados[index].cantidad = nuevaCantidad;
+        // Actualizar total
+        const filas = document.querySelectorAll('#cuerpoTabla tr');
+        if (filas[index]) {
+          const total = nuevaCantidad * productosSeleccionados[index].costo;
+          filas[index].cells[5].textContent = 'S/ ' + total.toFixed(2);
+        }
+      }
+      
+      function actualizarOC(index, valor) {
+        productosSeleccionados[index].oc = valor;
+      }
+      
+      function eliminarProducto(index) {
+        productosSeleccionados.splice(index, 1);
+        actualizarTabla();
+      }
+      
+      function generarPecosa() {
+        if (productosSeleccionados.length === 0) {
+          alert('Debe agregar al menos un artículo para despacho');
+          return;
+        }
+        
+        const pecosa = document.getElementById('pecosa').value;
+        if (!pecosa) {
+          alert('Por favor ingrese el número de Pecosa');
+          return;
+        }
+        
+        const datos = {
+          pecosa: pecosa,
+          dia: document.getElementById('dia').value,
+          mes: document.getElementById('mes').value,
+          anio: document.getElementById('anio').value,
+          solicitante: document.getElementById('solicitante').value,
+          observacion: document.getElementById('observacion').value,
+          referencia: document.getElementById('referencia').value,
+          articulos: productosSeleccionados
+        };
+        
+        // Mostrar mensaje de procesamiento
+        const boton = document.querySelector('.btn-primary');
+        boton.textContent = 'Generando...';
+        boton.disabled = true;
+        
+        google.script.run
+          .withSuccessHandler(function(result) {
+            alert(result);
+            google.script.host.close();
+          })
+          .withFailureHandler(function(error) {
+            alert('Error: ' + error.message);
+            boton.textContent = 'Generar Pecosa';
+            boton.disabled = false;
+          })
+          .generarPecosaDesdeInterfaz(datos);
+      }
+    </script>
+  </body>
+</html>
